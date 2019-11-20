@@ -74,11 +74,11 @@ Pour utiliser notre token, il faut tout d’abord le créer. Pour cela, il est n
 
 Pour traiter le token, on utilise un filter qui va l’extraire du header, le valider puis ajouter au contexte une authentication correspondant à l’utilisateur pour lequel le token a été émis : notre client est authentifié pour le reste de sa requête.
 
-![jwt-auth](http://blog.ippon.fr/content/images/2017/10/jwt-auth.png)
+![jwt-auth](jwt-auth.png)
 
 * Le contrôleur est assez simple : il envoie la demande d’authentification à un service et, si l’objet retourné est non null et que le service a validé l’authentification, il demande à un second service de créer notre token JWT à partir de l’objet Authentication. Il retourne ensuite le token créé comme contenu de la réponse.
 * Le service JwtTokenService sert à créer notre token ainsi qu’à le valider. Rien de spécial ici, on utilise simplement la librairie jjwt.
-* Le filter est sans doute la partie essentielle de notre chaîne d’authentification. Il va intercepter toutes les requêtes et vérifier la présence d’un JWT, et va ensuite valider le token et récupérer l’objet “authentication” pour l’ajouter au contexte de spring-security. Notre client sera donc authentifié pour la suite de l’exécution de sa requête. À la fin du processus, on supprime l’authentification du contexte.
+* Le filter est sans doute la partie essentielle de notre chaîne d’authentification. Il va intercepter toutes les requêtes et vérifier la présence d’un JWT, et va ensuite valider le token et récupérer l’objet “authentication” pour l’ajouter au contexte. Notre client sera donc authentifié pour la suite de l’exécution de sa requête. À la fin du processus, on supprime l’authentification du contexte.
 
 ## Un petit rafraîchissement ?
 
@@ -86,35 +86,13 @@ Le principal inconvénient des JWT est qu’ils ne peuvent pas être révoqués 
 
 Afin de limiter le risque de compromission longue, je vais vous proposer dans la suite de cet article un mécanisme se basant sur deux JWT. Le premier token est le même que précédemment et sert donc à nous authentifier à chaque requête via le header “Authorization”. Ce token aura par contre une durée de vie très faible, telle que 5 ou 10mn. Pour pallier cette durée de vie faible, on va émettre un second token avec une durée de vie plus longue (disons 1 mois) qui servira à “rafraîchir” le premier token une fois expiré. Ce token sera créé avec une information en plus, qui sera vérifiée à chaque demande de rafraîchissement de token. Cette information supplémentaire est enregistrée en base et diffère pour chaque utilisateur (salage). En cas de compromission de ce token, il suffit simplement de changer le sel stocké en base de données, ce qui invalidera notre token.
 
-![jwt-auth-2](http://blog.ippon.fr/content/images/2017/10/jwt-auth-2.png)
+![jwt-auth-2](jwt-auth-2.png)
 
-Si l’on repart du code précédent, il faut faire quelques changements pour adapter notre mécanisme.
+Il faut faire quelques changements pour adapter notre mécanisme.
 
-Tout d’abord, le contrôleur se voit gratifié d’une nouvelle méthode servant de point d’entrée à la requête de rafraîchissement.
-
-    @PostMapping(value="/auth/refresh",consumes=MediaType.APPLICATION_JSON_UTF8_VALUE)
-    public ResponseEntity<?> refreshToken(@RequestBody RefreshRequest refreshRequest) {
-        try {
-            JwtTokens tokens = jwtTokenService.refreshJwtToken(refreshRequest.refreshToken);
-            return ResponseEntity.ok().body(tokens);
-        } catch (Exception e) {
-       return ResponseEntity.status( HttpStatus.UNAUTHORIZED).body( HttpStatus.UNAUTHORIZED.getReasonPhrase());
-        }
-    }
-
-Ensuite, notre JWTService grossit de quelques méthodes, mais le principal ajout est celui de la validation de notre token de rafraîchissement.
-
-    @Override
-    private Jws<Claims> validateJwtRefreshToken(String token) {
-        JwtParser parser = Jwts.parser().setSigningKey(secret);
-        Jws<Claims> claims = parser.parseClaimsJws(token);
-
-        UserDto user = (UserDto) userService.loadUserByUsername(claims.getBody().getSubject());
-
-        return parser.require(USER_SECRET, user.getUserSecret()).parseClaimsJws(token);
-    }
-
-Comme on peut le voir, lors de la validation de notre token, on récupère l’identifiant de l’utilisateur afin de récupérer ses informations en base de données. Une fois les données récupérées, on vérifie que le sel récupéré en base et celui du token sont les mêmes. En cas d’incohérence, notre token est rejeté et la demande de rafraîchissement refusée.
+* Tout d’abord, le contrôleur se voit gratifié d’une nouvelle méthode servant de point d’entrée à la requête de rafraîchissement.
+* Ensuite, notre JWTService grossit de quelques méthodes, mais le principal ajout est celui de la validation de notre token de rafraîchissement.
+* Lors de la validation de notre token, on récupère l’identifiant de l’utilisateur afin de récupérer ses informations en base de données. Une fois les données récupérées, on vérifie que le sel récupéré en base et celui du token sont les mêmes. En cas d’incohérence, notre token est rejeté et la demande de rafraîchissement refusée.
 
 Côté client, il faudra être capable de gérer l’erreur retournée lors de l’expiration du token, puis d’effectuer la requête de rafraîchissement et de relancer la requête précédente avec le nouveau token obtenu.
 
@@ -129,4 +107,4 @@ PS: Je vous avais parlé d’autres moyens pour invalider un token compromis, do
 *   Changer le secret de son application (mais invalidera TOUS les tokens de TOUS vos utilisateurs)
 *   Tenir une liste de tokens invalidés dans un cache qui sera consulté avant d’effectuer la validation d’un token (ou l'inverse, qui consiste à garder la liste des tokens valides)
 
-Retrouvez le code complet de l’article sur github : [https://github.com/Kaway/jwt-auth](https://github.com/Kaway/jwt-auth)
+Retrouvez le code complet de l’article sur github avec la bib PHP-JWT: en cours
