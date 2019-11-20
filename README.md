@@ -6,7 +6,11 @@ JWT est un jeton permettant d’échanger des informations de manière sécuris�
 
 ## JWT, c’est quoi ?
 
-JWT pour JSON Web Token est une méthode sécurisée d’échange d’informations, décrite par la [RFC 7519](https://tools.ietf.org/html/rfc7519). L’information est échangée sous la forme d’un jeton signé afin de pouvoir en vérifier la légitimité. Ce jeton est compact et peut être inclus dans une URL sans poser de problème.
+JWT pour JSON Web Token est une méthode sécurisée d’échange d’informations, décrite par la [RFC 7519](https://tools.ietf.org/html/rfc7519).
+
+JWT est une chaîne qui est envoyée dans une requête HTTP ( de client à serveur ) pour valider l'authenticité du client. Mais maintenant, vous n'avez pas à enregistrer JWT dans la base de données. Au lieu de cela, vous ne l'enregistrez que du côté client.
+
+JWT est créé avec une clé secrète et cette clé secrète est privée pour vous. Lorsque vous recevez un JWT du client, vous pouvez vérifier ce JWT avec cette clé secrète. Toute modification du JWT entraînera un échec de la vérification.
 
 JWT est couramment utilisé pour implémenter des mécanismes d’authentification stateless pour des SPA (Single Page Application) ou pour des application mobiles.
 
@@ -58,10 +62,9 @@ Token généré :
 
 > Header **.** Payload **.** Signature
 
-Maintenant que l’on a notre token, utilisons-le pour nous authentifier !
-
-
 ![jwt-tocken](jws-encodage-base64-et-hashage-hmac-sha256-1.png)
+
+Maintenant que l’on a notre token, utilisons-le pour nous authentifier !
 
 ## S’authentifier avec JWT
 
