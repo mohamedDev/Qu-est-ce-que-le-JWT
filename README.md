@@ -60,83 +60,25 @@ Token généré :
 
 Maintenant que l’on a notre token, utilisons-le pour nous authentifier !
 
-## S’authentifier avec JWT et Spring Boot
+
+![jwt-tocken](jws-encodage-base64-et-hashage-hmac-sha256-1.png)
+
+## S’authentifier avec JWT
 
 La manière la plus courante d’utiliser un JWT est de s’en servir pour s’authentifier. Le token peut par exemple être utilisé par des applications mobiles ou des applications web de type Single Page Application pour prouver l’identité de l’utilisateur. Le token est alors envoyé avec chaque requête que le client fera auprès de l’application, qui autorisera, ou non, le client à accéder à ses services, suivant la validité du token. Ce type d’authentification, dit stateless, ne stocke pas les sessions utilisateurs dans le contexte de l’application.
 
-Il existe de nombreuses librairies permettant de créer et manipuler les JWT et il est fortement déconseillé de manipuler un JWT avec son propre code. Une liste non exhaustive de librairies est disponible à cette adresse: [https://jwt.io/#libraries-io](https://jwt.io/#libraries-io). Pour cet article, c’est **[jjwt](https://github.com/jwtk/jjwt)** qui a été choisi.
+Il existe de nombreuses librairies permettant de créer et manipuler les JWT et il est fortement déconseillé de manipuler un JWT avec son propre code. Une liste non exhaustive de librairies est disponible à cette adresse: [https://jwt.io/#libraries-io](https://jwt.io/#libraries-io).
 
 Pour utiliser notre token, il faut tout d’abord le créer. Pour cela, il est nécessaire de s’authentifier avec son login et son mot de passe auprès de l’application afin que celle-ci nous renvoie le token. Une fois le token obtenu, on peut faire appel à nos URL sécurisées en envoyant le token avec notre requête. La méthode la plus courante pour envoyer le token est de l’envoyer à travers l’en-tête HTTP Authorization en tant que Bearer token :  
 `Authorization: Bearer 'token'`
 
-Pour traiter le token, on utilise un filter qui va l’extraire du header, le valider puis ajouter au contexte de Spring une authentication correspondant à l’utilisateur pour lequel le token a été émis : notre client est authentifié pour le reste de sa requête.
+Pour traiter le token, on utilise un filter qui va l’extraire du header, le valider puis ajouter au contexte une authentication correspondant à l’utilisateur pour lequel le token a été émis : notre client est authentifié pour le reste de sa requête.
 
 ![jwt-auth](http://blog.ippon.fr/content/images/2017/10/jwt-auth.png)
 
-    @PostMapping(value = {"/auth"}, consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> authenticate(@RequestBody AuthenticationRequest authenticationRequest, HttpServletResponse response) {
-        Authentication authentication = authenticationService.authenticate(authenticationRequest);
-
-        if(authentication != null && authentication.isAuthenticated()) {
-            JwtTokens tokens = jwtTokenService.createTokens(authentication);
-            return ResponseEntity.ok().body(tokens);
-        }
-
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Authentication failed");
-    }
-
-Le contrôleur est assez simple : il envoie la demande d’authentification à un service et, si l’objet retourné est non null et que le service a validé l’authentification, il demande à un second service de créer notre token JWT à partir de l’objet Authentication. Il retourne ensuite le token créé comme contenu de la réponse.
-
-    @Override
-    public String createToken(UserDto user) {
-        return Jwts.builder()
-            .signWith(SignatureAlgorithm.HS512, secret)
-            .setClaims(buildUserClaims(user))
-            .setExpiration(getTokenExpirationDate())
-            .setIssuedAt(new Date())
-            .compact();
-    }
-
-    @Override
-    public Jws<Claims> validateJwtToken(String token) {
-        return Jwts.parser().setSigningKey(secret).parseClaimsJws(token);
-    }
-
-Le service JwtTokenService sert à créer notre token ainsi qu’à le valider. Rien de spécial ici, on utilise simplement la librairie jjwt.
-
-    @Override
-    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain chain) throws IOException, ServletException {
-
-        final HttpServletRequest request = (HttpServletRequest) servletRequest;
-        final HttpServletResponse response = (HttpServletResponse) servletResponse;
-
-        final Optional<String> token = Optional.ofNullable(request.getHeader(HttpHeaders.AUTHORIZATION));
-
-        Authentication authentication;
-
-        if(token.isPresent() && token.get().startsWith(BEARER)) {
-
-            String bearerToken = token.get().substring(BEARER.length()+1);
-
-                try {
-                    Jws<Claims> claims = jwtTokenService.validateJwtToken(bearerToken);
-                    authentication = authenticationService.getAuthentication(claims);
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                } catch (ExpiredJwtException exception) {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "error.jwt.expired");
-                    return;
-                } catch (JwtException exception) {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "error.jwt.invalid");
-                    return;
-                }
-
-        }
-
-        chain.doFilter(servletRequest, servletResponse);
-        SecurityContextHolder.getContext().setAuthentication(null);
-    }
-
-Le filter est sans doute la partie essentielle de notre chaîne d’authentification. Il va intercepter toutes les requêtes et vérifier la présence d’un JWT, et va ensuite valider le token et récupérer l’objet “authentication” pour l’ajouter au contexte de spring-security. Notre client sera donc authentifié pour la suite de l’exécution de sa requête. À la fin du processus, on supprime l’authentification du contexte.
+* Le contrôleur est assez simple : il envoie la demande d’authentification à un service et, si l’objet retourné est non null et que le service a validé l’authentification, il demande à un second service de créer notre token JWT à partir de l’objet Authentication. Il retourne ensuite le token créé comme contenu de la réponse.
+* Le service JwtTokenService sert à créer notre token ainsi qu’à le valider. Rien de spécial ici, on utilise simplement la librairie jjwt.
+* Le filter est sans doute la partie essentielle de notre chaîne d’authentification. Il va intercepter toutes les requêtes et vérifier la présence d’un JWT, et va ensuite valider le token et récupérer l’objet “authentication” pour l’ajouter au contexte de spring-security. Notre client sera donc authentifié pour la suite de l’exécution de sa requête. À la fin du processus, on supprime l’authentification du contexte.
 
 ## Un petit rafraîchissement ?
 
